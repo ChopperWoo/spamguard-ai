@@ -15,7 +15,10 @@ const SpamGuardAI = () => {
   });
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
@@ -26,7 +29,7 @@ const SpamGuardAI = () => {
       id: 1,
       from: 'john.doe@company.com',
       subject: 'Q4 Financial Report - Action Required',
-      preview: 'Please review the attached quarterly financial report...',
+      preview: 'Please review the attached quarterly financial report and provide your feedback by EOD...',
       timestamp: '2 hours ago',
       isSpam: false,
       confidence: 96,
@@ -36,8 +39,8 @@ const SpamGuardAI = () => {
     {
       id: 2,
       from: 'winner@mega-lottery.fake',
-      subject: 'URGENT: You\'ve Won $2,500,000 - Claim Now!',
-      preview: 'CONGRATULATIONS!!! You are the lucky winner...',
+      subject: 'URGENT: You have Won $2,500,000 - Claim Now!',
+      preview: 'CONGRATULATIONS!!! You are the lucky winner of our international lottery...',
       timestamp: '3 hours ago',
       isSpam: true,
       confidence: 99,
@@ -48,12 +51,23 @@ const SpamGuardAI = () => {
       id: 3,
       from: 'security@your-bank.phish',
       subject: 'URGENT: Account Suspended - Verify Identity',
-      preview: 'Your account has been temporarily suspended...',
+      preview: 'Your account has been temporarily suspended due to suspicious activity...',
       timestamp: '5 hours ago',
       isSpam: true,
       confidence: 94,
       category: 'phishing',
       isRead: false
+    },
+    {
+      id: 4,
+      from: 'newsletter@techcrunch.com',
+      subject: 'Daily Crunch: AI startup raises $50M',
+      preview: 'Here are the top tech stories from today: AI startup secures major funding...',
+      timestamp: '1 day ago',
+      isSpam: false,
+      confidence: 91,
+      category: 'newsletter',
+      isRead: true
     }
   ]);
 
@@ -118,13 +132,14 @@ const SpamGuardAI = () => {
         </div>
       </div>
       <p className={`text-sm mt-2 ${email.isSpam ? 'text-red-700' : 'text-gray-700'}`}>
-        {email.isSpam && settings.blockSuspiciousImages ? '[Content blocked]' : email.preview}
+        {email.isSpam && settings.blockSuspiciousImages ? '[Content blocked for security]' : email.preview}
       </p>
       <div className="flex items-center justify-between mt-3">
         <span className={`text-xs px-2 py-1 rounded ${
           email.category === 'work' ? 'bg-blue-100 text-blue-800' :
           email.category === 'scam' ? 'bg-red-100 text-red-800' :
-          'bg-orange-100 text-orange-800'
+          email.category === 'phishing' ? 'bg-orange-100 text-orange-800' :
+          'bg-gray-100 text-gray-800'
         }`}>
           {email.category}
         </span>
@@ -159,7 +174,6 @@ const SpamGuardAI = () => {
 
   const Dashboard = () => (
     <div className="space-y-4 md:space-y-6">
-      {/* Outlook Connection */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">MS Outlook Integration</h3>
@@ -172,7 +186,7 @@ const SpamGuardAI = () => {
         
         {!outlookStatus.connected ? (
           <div className="space-y-4">
-            <p className="text-gray-600">Connect to your Microsoft Outlook account to start scanning.</p>
+            <p className="text-gray-600">Connect to your Microsoft Outlook account to start scanning your inbox for spam and malicious emails.</p>
             <button
               onClick={connectToOutlook}
               disabled={isScanning}
@@ -190,22 +204,62 @@ const SpamGuardAI = () => {
                 </>
               )}
             </button>
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <Lock className="w-4 h-4 inline mr-1" />
+                Secure OAuth 2.0 authentication. We never store your password.
+              </p>
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gray-50 p-3 rounded">
-              <p className="text-sm text-gray-600">Total Emails</p>
-              <p className="text-lg font-semibold">{outlookStatus.totalEmails}</p>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-gray-50 p-3 rounded">
+                <p className="text-sm text-gray-600">Total Emails</p>
+                <p className="text-lg font-semibold">{outlookStatus.totalEmails}</p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded">
+                <p className="text-sm text-gray-600">New Emails</p>
+                <p className="text-lg font-semibold text-blue-600">{outlookStatus.newEmails}</p>
+              </div>
             </div>
-            <div className="bg-gray-50 p-3 rounded">
-              <p className="text-sm text-gray-600">Last Sync</p>
-              <p className="text-sm font-medium">{outlookStatus.lastSync}</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Last Sync</p>
+                <p className="text-sm font-medium">{outlookStatus.lastSync}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsScanning(true);
+                  setTimeout(() => {
+                    setOutlookStatus(prev => ({
+                      ...prev,
+                      lastSync: new Date().toLocaleTimeString(),
+                      newEmails: Math.floor(Math.random() * 5)
+                    }));
+                    setIsScanning(false);
+                  }, 2000);
+                }}
+                disabled={isScanning}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isScanning ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Scanning...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    Scan Now
+                  </>
+                )}
+              </button>
             </div>
           </div>
         )}
       </div>
       
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <StatCard icon={Mail} title="Scanned" value={stats.totalScanned} color="blue" />
         <StatCard icon={Shield} title="Blocked" value={stats.spamBlocked} color="red" />
@@ -213,24 +267,60 @@ const SpamGuardAI = () => {
         <StatCard icon={User} title="Time Saved" value={stats.timeSaved} color="purple" />
       </div>
       
-      {/* Recent Activity */}
-      <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
-        <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
-        <div className="space-y-3">
-          {emails.slice(0, 3).map(email => (
-            <div key={email.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              {email.isSpam ? (
-                <XCircle className="w-5 h-5 text-red-500" />
-              ) : (
-                <CheckCircle className="w-5 h-5 text-green-500" />
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{email.subject}</p>
-                <p className="text-xs text-gray-500">{email.from}</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
+          <div className="space-y-3">
+            {emails.slice(0, 3).map(email => (
+              <div key={email.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                {email.isSpam ? (
+                  <XCircle className="w-5 h-5 text-red-500" />
+                ) : (
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{email.subject}</p>
+                  <p className="text-xs text-gray-500">{email.from}</p>
+                </div>
+                <SpamConfidenceBadge confidence={email.confidence} isSpam={email.isSpam} />
               </div>
-              <SpamConfidenceBadge confidence={email.confidence} isSpam={email.isSpam} />
+            ))}
+          </div>
+        </div>
+        
+        <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-semibold mb-4">AI Protection Status</h3>
+          <div className="space-y-4">
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium text-gray-700">Spam Detection</span>
+                <span className="text-sm text-green-600">Active</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-green-600 h-2 rounded-full" style={{width: '97%'}}></div>
+              </div>
             </div>
-          ))}
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium text-gray-700">Phishing Protection</span>
+                <span className="text-sm text-green-600">Active</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-green-600 h-2 rounded-full" style={{width: '94%'}}></div>
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium text-gray-700">Outlook Integration</span>
+                <span className={`text-sm ${outlookStatus.connected ? 'text-green-600' : 'text-orange-600'}`}>
+                  {outlookStatus.connected ? 'Connected' : 'Pending'}
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className={`h-2 rounded-full ${outlookStatus.connected ? 'bg-green-600' : 'bg-orange-500'}`} style={{width: outlookStatus.connected ? '100%' : '45%'}}></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -254,7 +344,7 @@ const SpamGuardAI = () => {
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 text-yellow-600" />
           <p className="text-sm text-yellow-800">
-            These emails have been automatically quarantined by SpamGuard AI.
+            These emails have been automatically quarantined by SpamGuard AI. Review carefully before taking action.
           </p>
         </div>
       </div>
@@ -268,9 +358,8 @@ const SpamGuardAI = () => {
 
   const SettingsView = () => (
     <div className="space-y-6">
-      {!isMobile && <h2 className="text-2xl font-bold text-gray-900">Settings</h2>}
+      <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
       
-      {/* Spam Protection Settings */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold mb-4">Spam Protection</h3>
         <div className="space-y-4">
@@ -305,10 +394,25 @@ const SpamGuardAI = () => {
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
+          
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-medium text-gray-900">Real-time Outlook Scanning</h4>
+              <p className="text-sm text-gray-600">Automatically scan new emails as they arrive</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.realTimeScanning}
+                onChange={(e) => setSettings({...settings, realTimeScanning: e.target.checked})}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
         </div>
       </div>
       
-      {/* CUSTOM KEYWORDS SECTION */}
       <div className="bg-red-50 border-2 border-red-200 p-6 rounded-lg shadow-sm">
         <div className="flex items-center gap-2 mb-4">
           <Filter className="w-6 h-6 text-red-600" />
@@ -316,7 +420,6 @@ const SpamGuardAI = () => {
         </div>
         <p className="text-red-800 mb-6">Add keywords and phrases that should trigger spam detection</p>
         
-        {/* Add New Keyword Input */}
         <div className="bg-white p-4 rounded-lg mb-6">
           <h4 className="font-medium text-gray-900 mb-3">Add New Keyword</h4>
           <div className="flex gap-3">
@@ -362,7 +465,6 @@ const SpamGuardAI = () => {
           </div>
         </div>
 
-        {/* Current Keywords Display */}
         <div className="bg-white p-4 rounded-lg">
           <div className="flex items-center justify-between mb-4">
             <h4 className="font-medium text-gray-900">
@@ -371,7 +473,7 @@ const SpamGuardAI = () => {
             {settings.customKeywords.length > 0 && (
               <button
                 onClick={() => {
-                  if (confirm('Are you sure you want to remove all keywords?')) {
+                  if (window.confirm('Are you sure you want to remove all keywords?')) {
                     setSettings({...settings, customKeywords: []});
                   }
                 }}
@@ -415,7 +517,6 @@ const SpamGuardAI = () => {
           )}
         </div>
 
-        {/* Quick Add Suggestions */}
         <div className="bg-white p-4 rounded-lg mt-4">
           <h4 className="font-medium text-gray-900 mb-4">Quick Add Common Spam Keywords</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -423,7 +524,125 @@ const SpamGuardAI = () => {
               'free money', 'act now', 'limited offer', 'click here', 
               'guaranteed', 'urgent response', 'congratulations', 'winner',
               'claim prize', 'exclusive deal', 'no obligation', 'risk free'
-            ].map((suggestion) => (
+            ].map(item => (
+              <button
+                key={item.id}
+                onClick={() => setCurrentView(item.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${
+                  currentView === item.id ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <item.icon className="w-5 h-5" />
+                {item.label}
+                {item.count !== undefined && (
+                  <span className={`ml-auto text-xs font-medium px-2 py-1 rounded-full ${
+                    item.id === 'spam' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                  }`}>
+                    {item.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+      )}
+
+      {isMobile && (
+        <>
+          {sidebarOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setSidebarOpen(false)} />
+          )}
+          <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform`}>
+            <div className="flex items-center justify-between p-4 border-b">
+              <div className="flex items-center gap-2">
+                <Shield className="w-8 h-8 text-blue-600" />
+                <h1 className="text-xl font-bold">SpamGuard AI</h1>
+              </div>
+              <button onClick={() => setSidebarOpen(false)}>
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <nav className="p-4 space-y-2">
+              {[
+                { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
+                { id: 'inbox', icon: Mail, label: 'Clean Inbox' },
+                { id: 'spam', icon: Trash2, label: 'Spam Quarantine' },
+                { id: 'settings', icon: Settings, label: 'Settings' }
+              ].map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => { setCurrentView(item.id); setSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${
+                    currentView === item.id ? 'bg-blue-100 text-blue-700' : 'text-gray-700'
+                  }`}
+                >
+                  <item.icon className="w-5 h-5" />
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+        </>
+      )}
+      
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white shadow-sm border-b px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {isMobile && (
+                <button onClick={() => setSidebarOpen(true)}>
+                  <Menu className="w-6 h-6" />
+                </button>
+              )}
+              <Shield className="w-6 h-6 text-blue-600" />
+              <h2 className="text-xl font-semibold text-gray-900">
+                {currentView === 'dashboard' ? 'Dashboard' :
+                 currentView === 'inbox' ? 'Clean Inbox' :
+                 currentView === 'spam' ? 'Spam Quarantine' : 'Settings'}
+              </h2>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium">Protected</span>
+              </div>
+            </div>
+          </div>
+        </header>
+        
+        <main className={`flex-1 overflow-auto p-6 ${isMobile ? 'pb-20' : ''}`}>
+          {renderCurrentView()}
+        </main>
+      </div>
+      
+      {isMobile && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t px-4 py-2">
+          <div className="flex justify-around">
+            {[
+              { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
+              { id: 'inbox', icon: Mail, label: 'Inbox' },
+              { id: 'spam', icon: Shield, label: 'Quarantine' },
+              { id: 'settings', icon: Settings, label: 'Settings' }
+            ].map(item => (
+              <button
+                key={item.id}
+                onClick={() => setCurrentView(item.id)}
+                className={`flex flex-col items-center py-2 px-3 rounded-lg ${
+                  currentView === item.id ? 'text-blue-600 bg-blue-50' : 'text-gray-600'
+                }`}
+              >
+                <item.icon className="w-5 h-5" />
+                <span className="text-xs mt-1">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default SpamGuardAI;(suggestion) => (
               <button
                 key={suggestion}
                 onClick={() => {
@@ -448,7 +667,6 @@ const SpamGuardAI = () => {
         </div>
       </div>
       
-      {/* Privacy Section */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold mb-4">Privacy & Security</h3>
         <div className="flex items-start gap-3 p-4 bg-green-50 rounded-lg">
@@ -456,6 +674,24 @@ const SpamGuardAI = () => {
           <div>
             <h4 className="font-medium text-green-900">On-Device Processing</h4>
             <p className="text-sm text-green-700">All AI analysis happens locally on your device. Your emails never leave your computer, ensuring complete privacy and security.</p>
+          </div>
+        </div>
+        
+        <div className="mt-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-medium text-gray-900">Push Notifications</h4>
+              <p className="text-sm text-gray-600">Get alerts when spam is detected</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.notificationAlerts}
+                onChange={(e) => setSettings({...settings, notificationAlerts: e.target.checked})}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
           </div>
         </div>
       </div>
@@ -474,7 +710,6 @@ const SpamGuardAI = () => {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Desktop Sidebar */}
       {!isMobile && (
         <div className="w-64 bg-white shadow-lg border-r">
           <div className="flex items-center gap-2 p-4 border-b">
@@ -611,4 +846,4 @@ const SpamGuardAI = () => {
   );
 };
 
-export default SpamGuardAI;
+export default SpamGuardAI;S
