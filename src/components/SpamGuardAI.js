@@ -720,5 +720,4 @@ const SpamGuardAI = () => {
     </div>
   );
 };
-
 export default SpamGuardAI;
