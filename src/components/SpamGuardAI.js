@@ -14,7 +14,7 @@ const SpamGuardAI = () => {
     </div>
   );
 
-  const Settings = () => (
+  const SettingsView = () => (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-gray-900 mb-4">Settings</h1>
       <div className="bg-white p-6 rounded-lg shadow border">
@@ -27,23 +27,22 @@ const SpamGuardAI = () => {
   const renderView = () => {
     switch (currentView) {
       case 'settings':
-        return <Settings />;
+        return <SettingsView />;
       default:
         return <Dashboard />;
     }
   };
 
   return (
-          <div className="flex-1 flex flex-col">
-        <header className="bg-white shadow-sm border-b px-6 py-4">
-          <h2 className="text-xl font-semibold text-gray-900">
-            {currentView === 'dashboard' ? 'Dashboard' : 'Settings'}
-          </h2>
-        </header>
-        <main className="flex-1 overflow-auto">
-          {renderView()}
-        </main>
-      </div>
+    <div className="flex-1 flex flex-col">
+      <header className="bg-white shadow-sm border-b px-6 py-4">
+        <h2 className="text-xl font-semibold text-gray-900">
+          {currentView === 'dashboard' ? 'Dashboard' : 'Settings'}
+        </h2>
+      </header>
+      <main className="flex-1 overflow-auto">
+        {renderView()}
+      </main>
     </div>
   );
 };
