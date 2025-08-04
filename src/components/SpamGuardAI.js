@@ -1,5 +1,4 @@
-﻿// eslint-disable-next-line unicode-bom
-/* eslint-disable no-unused-vars */
+﻿/* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import { Shield, Mail, Settings, AlertTriangle, CheckCircle, Trash2, BarChart3, Brain, Lock, RefreshCw, Download, Filter, Plus, X, Wifi, Bell, Search, Archive, Star, Home, Menu, User, HelpCircle } from 'lucide-react';
 
