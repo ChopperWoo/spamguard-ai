@@ -1,7 +1,7 @@
 // src/config/authConfig.js
 export const msalConfig = {
   auth: {
-    clientId: process.env.REACT_APP_AZURE_CLIENT_ID || "your-client-id-here",
+    clientId: process.env.REACT_APP_AZURE_CLIENT_ID || "42a687ab-0583-4761-8c37-bd1b1f9dc952",
     authority: "https://login.microsoftonline.com/common",
     redirectUri: process.env.NODE_ENV === 'production' 
       ? process.env.REACT_APP_REDIRECT_URI || window.location.origin
