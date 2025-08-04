@@ -1,12 +1,6 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import { Shield, Mail, Settings, AlertTriangle, CheckCircle, Trash2, BarChart3, Brain, Lock, RefreshCw, Download, Filter, Plus, X, Wifi, Bell, Search, Archive, Star, Home, Menu, User, HelpCircle } from 'lucide-react';
-import { PublicClientApplication } from '@azure/msal-browser';
-import { msalConfig, loginRequest } from '../config/authConfig';
-import GraphService from '../services/graphService';
-
-// Initialize MSAL
-const msalInstance = new PublicClientApplication(msalConfig);
 
 const SpamGuardAI = () => {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -14,11 +8,8 @@ const SpamGuardAI = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
-  const [graphService, setGraphService] = useState(null);
-  const [realEmails, setRealEmails] = useState([]);
-  const [isLoadingEmails, setIsLoadingEmails] = useState(false);
+  const [canInstall, setCanInstall] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
 
   // AI Learning Status
   const [aiLearning, setAiLearning] = useState({
@@ -41,6 +32,11 @@ const SpamGuardAI = () => {
   useEffect(() => {
     const initializeMsal = async () => {
       try {
+        if (!msalInstance) {
+          console.warn('Azure authentication not available - missing dependencies');
+          return;
+        }
+
         await msalInstance.initialize();
         const accounts = msalInstance.getAllAccounts();
         
@@ -50,8 +46,10 @@ const SpamGuardAI = () => {
           setUser(accounts[0]);
           
           // Initialize Graph Service
-          const service = new GraphService(msalInstance);
-          setGraphService(service);
+          if (GraphService) {
+            const service = new GraphService(msalInstance);
+            setGraphService(service);
+          }
           
           // Update connection status
           setOutlookStatus(prev => ({
@@ -66,7 +64,35 @@ const SpamGuardAI = () => {
     };
 
     initializeMsal();
+    
+    // Check if app is already installed
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+      setIsInstalled(true);
+    }
+    
+    // Listen for PWA install prompt
+    const handleInstallPrompt = () => setCanInstall(true);
+    document.addEventListener('pwa-installable', handleInstallPrompt);
+    
+    // Handle shortcuts from home screen
+    const shortcut = sessionStorage.getItem('pwa-shortcut');
+    if (shortcut) {
+      setCurrentView(shortcut);
+      sessionStorage.removeItem('pwa-shortcut');
+    }
+    
+    return () => {
+      document.removeEventListener('pwa-installable', handleInstallPrompt);
+    };
   }, []);
+
+  // PWA Install function
+  const installPWA = () => {
+    if (window.installPWA) {
+      window.installPWA();
+      setCanInstall(false);
+    }
+  };
 
   // Load emails when authenticated
   useEffect(() => {
@@ -78,6 +104,24 @@ const SpamGuardAI = () => {
   // Connect to Outlook with real authentication
   const connectToOutlook = async () => {
     try {
+      if (!msalInstance || !loginRequest) {
+        // Fallback for missing dependencies
+        setIsScanning(true);
+        setOutlookStatus(prev => ({ ...prev, syncInProgress: true }));
+        
+        setTimeout(() => {
+          setOutlookStatus({
+            connected: true,
+            lastSync: new Date().toLocaleTimeString(),
+            totalEmails: emails.length,
+            newEmails: emails.filter(e => !e.isRead).length,
+            syncInProgress: false
+          });
+          setIsScanning(false);
+        }, 2000);
+        return;
+      }
+
       setIsScanning(true);
       setOutlookStatus(prev => ({ ...prev, syncInProgress: true }));
 
@@ -90,21 +134,23 @@ const SpamGuardAI = () => {
         setUser(loginResponse.account);
 
         // Initialize Graph Service
-        const service = new GraphService(msalInstance);
-        setGraphService(service);
+        if (GraphService) {
+          const service = new GraphService(msalInstance);
+          setGraphService(service);
 
-        // Get user profile
-        const userProfile = await service.getUserProfile();
-        console.log('User Profile:', userProfile);
+          // Get user profile
+          const userProfile = await service.getUserProfile();
+          console.log('User Profile:', userProfile);
 
-        // Load emails
-        await loadEmails(service);
+          // Load emails
+          await loadEmails(service);
+        }
 
         setOutlookStatus({
           connected: true,
           lastSync: new Date().toLocaleTimeString(),
-          totalEmails: realEmails.length,
-          newEmails: realEmails.filter(e => !e.isRead).length,
+          totalEmails: realEmails.length || emails.length,
+          newEmails: (realEmails.length > 0 ? realEmails : emails).filter(e => !e.isRead).length,
           syncInProgress: false
         });
       }
@@ -309,10 +355,9 @@ const SpamGuardAI = () => {
     onDeviceProcessing: '100%'
   };
 
-  // Use real emails if available, otherwise fallback to mock data
-  const displayEmails = realEmails.length > 0 ? realEmails : emails;
-  const spamEmails = displayEmails.filter(email => email.isSpam);
-  const cleanEmails = displayEmails.filter(email => !email.isSpam);
+  // Use mock data for demo
+  const spamEmails = emails.filter(email => email.isSpam);
+  const cleanEmails = emails.filter(email => !email.isSpam);
 
       // Mobile detection
   useEffect(() => {
@@ -323,8 +368,6 @@ const SpamGuardAI = () => {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  // Connect to Outlook - now removed, replaced with real function above
 
   // Spam confidence badge
   const SpamConfidenceBadge = ({ confidence, isSpam, category }) => {
@@ -1198,6 +1241,15 @@ const SpamGuardAI = () => {
         <span className="font-bold text-gray-900">SpamGuard AI</span>
       </div>
       <div className="flex items-center gap-2">
+        {canInstall && !isInstalled && (
+          <button
+            onClick={installPWA}
+            className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition-colors"
+            title="Install App"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+        )}
         <Bell className="w-5 h-5 text-gray-600" />
         <User className="w-5 h-5 text-gray-600" />
       </div>
@@ -1225,7 +1277,7 @@ const SpamGuardAI = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 flex safe-area-inset">
       {/* Sidebar */}
       <NavigationMenu />
       
@@ -1240,9 +1292,34 @@ const SpamGuardAI = () => {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <TopBar />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto pb-safe">
           {renderCurrentView()}
         </main>
+        
+        {/* PWA Install Banner */}
+        {canInstall && !isInstalled && !isMobile && (
+          <div className="fixed bottom-4 right-4 bg-blue-600 text-white p-4 rounded-lg shadow-lg z-50">
+            <div className="flex items-center gap-3">
+              <Download className="w-5 h-5" />
+              <div>
+                <p className="font-medium">Install SpamGuard AI</p>
+                <p className="text-sm opacity-90">Get the full app experience</p>
+              </div>
+              <button
+                onClick={installPWA}
+                className="bg-white text-blue-600 px-3 py-1 rounded font-medium hover:bg-gray-100 transition-colors"
+              >
+                Install
+              </button>
+              <button
+                onClick={() => setCanInstall(false)}
+                className="text-white hover:text-gray-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

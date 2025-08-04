@@ -1,6 +1,7 @@
 // src/services/graphService.js
 import { Client } from '@microsoft/microsoft-graph-client';
 import { AuthCodeMSALBrowserAuthenticationProvider } from '@microsoft/microsoft-graph-client/authProviders/authCodeMsalBrowser';
+import { loginRequest } from '../config/authConfig';
 
 class GraphService {
   constructor(msalInstance) {
@@ -10,17 +11,20 @@ class GraphService {
 
   async initializeGraphClient() {
     try {
-      // Create an authentication provider
+      const account = this.msalInstance.getActiveAccount();
+      if (!account) {
+        throw new Error('No active account found');
+      }
+
       const authProvider = new AuthCodeMSALBrowserAuthenticationProvider(
         this.msalInstance,
         {
-          account: this.msalInstance.getActiveAccount(),
-          scopes: ['User.Read', 'Mail.Read', 'Mail.ReadWrite'],
+          account: account,
+          scopes: loginRequest.scopes,
           interactionType: 'popup'
         }
       );
 
-      // Initialize Graph client
       this.graphClient = Client.initWithMiddleware({ authProvider });
       return true;
     } catch (error) {
@@ -35,7 +39,11 @@ class GraphService {
         await this.initializeGraphClient();
       }
       
-      const user = await this.graphClient.api('/me').get();
+      const user = await this.graphClient
+        .api('/me')
+        .select('displayName,mail,userPrincipalName,id')
+        .get();
+      
       return user;
     } catch (error) {
       console.error('Error getting user profile:', error);
@@ -43,104 +51,43 @@ class GraphService {
     }
   }
 
-  async getEmails(pageSize = 50, filter = null) {
+  async getEmails(pageSize = 50) {
     try {
       if (!this.graphClient) {
         await this.initializeGraphClient();
       }
 
-      let query = this.graphClient
+      const response = await this.graphClient
         .api('/me/messages')
         .top(pageSize)
-        .select('id,subject,from,receivedDateTime,bodyPreview,hasAttachments,isRead,importance,internetMessageHeaders')
-        .orderby('receivedDateTime desc');
+        .select('id,subject,from,receivedDateTime,bodyPreview,hasAttachments,isRead,importance')
+        .orderby('receivedDateTime desc')
+        .get();
 
-      if (filter) {
-        query = query.filter(filter);
-      }
-
-      const emails = await query.get();
-      return this.transformEmails(emails.value);
+      return this.transformEmails(response.value);
     } catch (error) {
       console.error('Error getting emails:', error);
       throw error;
     }
   }
 
-  async moveEmailToFolder(emailId, folderId) {
-    try {
-      if (!this.graphClient) {
-        await this.initializeGraphClient();
-      }
-
-      await this.graphClient
-        .api(`/me/messages/${emailId}/move`)
-        .post({
-          destinationId: folderId
-        });
-
-      return true;
-    } catch (error) {
-      console.error('Error moving email:', error);
-      throw error;
-    }
-  }
-
-  async createSpamFolder() {
-    try {
-      if (!this.graphClient) {
-        await this.initializeGraphClient();
-      }
-
-      const folder = await this.graphClient
-        .api('/me/mailFolders')
-        .post({
-          displayName: 'SpamGuard Quarantine',
-          isHidden: false
-        });
-
-      return folder;
-    } catch (error) {
-      console.error('Error creating spam folder:', error);
-      throw error;
-    }
-  }
-
-  async getMailFolders() {
-    try {
-      if (!this.graphClient) {
-        await this.initializeGraphClient();
-      }
-
-      const folders = await this.graphClient
-        .api('/me/mailFolders')
-        .get();
-
-      return folders.value;
-    } catch (error) {
-      console.error('Error getting mail folders:', error);
-      throw error;
-    }
-  }
-
-  // Transform Microsoft Graph email format to our app format
   transformEmails(emails) {
-    return emails.map((email, index) => ({
+    return emails.map((email) => ({
       id: email.id,
       from: email.from?.emailAddress?.address || 'Unknown',
-      fromName: email.from?.emailAddress?.name || email.from?.emailAddress?.address || 'Unknown',
+      fromName: email.from?.emailAddress?.name || 'Unknown',
       subject: email.subject || '(No Subject)',
       preview: email.bodyPreview || '',
       timestamp: this.formatTimestamp(email.receivedDateTime),
-      isSpam: false, // This will be determined by your AI logic
-      confidence: 0, // This will be set by your spam detection
+      isSpam: false,
+      confidence: 0,
       category: this.detectCategory(email),
       hasAttachment: email.hasAttachments || false,
       isRead: email.isRead || false,
       starred: false,
       importance: email.importance || 'normal',
-      rawEmail: email, // Keep original for reference
-      aiAnalysis: null // Will be populated by your AI
+      rawEmail: email,
+      aiAnalysis: null
     }));
   }
 
@@ -148,14 +95,13 @@ class GraphService {
     const subject = (email.subject || '').toLowerCase();
     const from = (email.from?.emailAddress?.address || '').toLowerCase();
     
-    // Basic category detection - you can enhance this
     if (from.includes('noreply') || from.includes('newsletter')) {
       return 'newsletter';
     }
-    if (subject.includes('work') || subject.includes('meeting') || subject.includes('project')) {
+    if (subject.includes('work') || subject.includes('meeting')) {
       return 'work';
     }
-    if (from.includes('microsoft') || from.includes('office') || from.includes('service')) {
+    if (from.includes('microsoft') || from.includes('service')) {
       return 'service';
     }
     
@@ -171,31 +117,25 @@ class GraphService {
       return 'Just now';
     } else if (diffInHours < 24) {
       return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
-    } else if (diffInHours < 48) {
-      return '1 day ago';
     } else {
       return `${Math.floor(diffInHours / 24)} days ago`;
     }
   }
 
-  // Spam detection integration point
   async analyzeEmailForSpam(email) {
     try {
-      // This is where you'd integrate your AI spam detection logic
-      // For now, we'll do basic keyword detection
       const spamKeywords = [
         'lottery', 'winner', 'claim now', 'urgent action', 'limited time',
         'viagra', 'casino', 'free money', 'congratulations', 'prize'
       ];
 
       const subject = (email.subject || '').toLowerCase();
-      const preview = (email.bodyPreview || '').toLowerCase();
-      const from = (email.from?.emailAddress?.address || '').toLowerCase();
+      const preview = (email.preview || '').toLowerCase();
+      const from = (email.from || '').toLowerCase();
 
       let spamScore = 0;
       let detectedCategories = [];
 
-      // Check for spam keywords
       spamKeywords.forEach(keyword => {
         if (subject.includes(keyword) || preview.includes(keyword)) {
           spamScore += 20;
@@ -203,16 +143,20 @@ class GraphService {
         }
       });
 
-      // Check sender patterns
       if (from.includes('noreply') && subject.includes('winner')) {
         spamScore += 30;
         detectedCategories.push('sophisticated_scam');
       }
 
-      // Check for phishing patterns
       if (subject.includes('verify') && subject.includes('account')) {
         spamScore += 40;
         detectedCategories.push('phishing');
+      }
+
+      const adultKeywords = ['adult', 'xxx', 'sexy', 'viagra'];
+      if (adultKeywords.some(keyword => subject.includes(keyword) || preview.includes(keyword))) {
+        spamScore += 35;
+        detectedCategories.push('pornographic');
       }
 
       const isSpam = spamScore > 50;
@@ -221,7 +165,7 @@ class GraphService {
       return {
         isSpam,
         confidence,
-        category: isSpam ? detectedCategories[0] || 'general_spam' : 'clean',
+        category: isSpam ? detectedCategories[0] || 'general_spam' : email.category,
         aiAnalysis: {
           senderReputation: spamScore > 70 ? 'suspicious' : spamScore > 30 ? 'unknown' : 'trusted',
           contentAnalysis: detectedCategories.length > 0 ? detectedCategories.join(', ') : 'clean content',
